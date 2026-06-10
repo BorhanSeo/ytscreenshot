@@ -19,8 +19,8 @@ export default function Home() {
     setLoading(true);
 
     try {
-      // Use the live Render backend URL
-      const apiUrl = "https://ytscreenshot-backend.onrender.com";
+      // Use the live Cloudflare Tunnel URL to the local backend
+      const apiUrl = "https://specify-august-offer-boss.trycloudflare.com";
       
       const response = await fetch(`${apiUrl}/api/screenshots`, {
         method: "POST",
