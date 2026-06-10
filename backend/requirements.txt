@@ -1,4 +1,3 @@
 fastapi
 uvicorn
-playwright
-opencv-python-headless
+yt-dlp

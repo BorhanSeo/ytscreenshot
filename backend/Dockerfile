@@ -1,6 +1,9 @@
-FROM mcr.microsoft.com/playwright/python:v1.60.0-jammy
+FROM python:3.10-slim
 
 WORKDIR /app
+
+# Install ffmpeg
+RUN apt-get update && apt-get install -y ffmpeg && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
@@ -10,4 +13,4 @@ COPY . .
 # Render exposes PORT env variable, defaulting to 10000
 EXPOSE 10000
 
-CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-10000}
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-10000}"]
