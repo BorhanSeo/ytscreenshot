@@ -37,7 +37,7 @@ def extract_frames(video_url: str, output_folder: str, interval: int = 5):
         # Get the direct video stream URL using pytubefix
         print(f"Fetching stream URL for {video_url}...")
         from pytubefix import YouTube
-        yt = YouTube(video_url)
+        yt = YouTube(video_url, client='WEB', use_po_token=True)
         stream = yt.streams.filter(file_extension='mp4').first()
         
         if not stream or not stream.url:
