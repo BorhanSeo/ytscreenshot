@@ -19,20 +19,24 @@ export default function Home() {
     setLoading(true);
 
     try {
-      // For local testing, assuming FastAPI is running on port 8000
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      // Use the live Render backend URL
+      const apiUrl = "https://ytscreenshot-backend.onrender.com";
       
       const response = await fetch(`${apiUrl}/api/screenshots`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ video_url: url }),
+        body: JSON.stringify({ videoUrl: url }),
       });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
-        throw new Error(errorData?.detail || "Failed to process video");
+        let errorMsg = "Failed to process video";
+        if (errorData?.detail) {
+          errorMsg = typeof errorData.detail === 'string' ? errorData.detail : JSON.stringify(errorData.detail);
+        }
+        throw new Error(errorMsg);
       }
 
       // Download the zip file
@@ -141,8 +145,8 @@ export default function Home() {
             <div className="p-3 rounded-xl bg-purple-500/10 text-purple-400">
               <ImageIcon className="w-6 h-6" />
             </div>
-            <h3 className="font-medium text-neutral-200">Smart Cropping</h3>
-            <p className="text-sm text-neutral-500">Removes UI elements and borders using OpenCV.</p>
+            <h3 className="font-medium text-neutral-200">Raw Stream Extraction</h3>
+            <p className="text-sm text-neutral-500">Gets clean frames directly from the video stream without any YouTube UI.</p>
           </div>
           <div className="flex flex-col items-center gap-3 p-6 rounded-2xl bg-white/5 border border-white/5 text-center">
             <div className="p-3 rounded-xl bg-green-500/10 text-green-400">
