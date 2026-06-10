@@ -34,16 +34,16 @@ def extract_frames(video_url: str, output_folder: str, interval: int = 5):
     os.makedirs(output_folder, exist_ok=True)
     
     try:
-        # Get the direct video stream URL using yt-dlp
+        # Get the direct video stream URL using pytubefix
         print(f"Fetching stream URL for {video_url}...")
-        result = subprocess.run(
-            ["yt-dlp", "-f", "bestvideo[ext=mp4]/best", "--get-url", video_url],
-            capture_output=True, text=True, check=True
-        )
-        stream_url = result.stdout.strip()
+        from pytubefix import YouTube
+        yt = YouTube(video_url)
+        stream = yt.streams.filter(file_extension='mp4').first()
         
-        if not stream_url:
-            raise Exception("yt-dlp returned an empty stream URL")
+        if not stream or not stream.url:
+            raise Exception("pytubefix could not find a suitable mp4 stream")
+            
+        stream_url = stream.url
             
         print("Extracting frames with ffmpeg...")
         output_pattern = os.path.join(output_folder, "screenshot_%04d.jpg")
