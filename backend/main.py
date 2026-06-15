@@ -22,6 +22,7 @@ app.add_middleware(
 class ScreenshotRequest(BaseModel):
     videoUrl: str
     intervalSeconds: int = 5
+    cropType: str = "none" # "none", "no_bottom", "central_4_3"
 
 def cleanup(folder_path: str, zip_path: str):
     time.sleep(60)
@@ -30,14 +31,14 @@ def cleanup(folder_path: str, zip_path: str):
     if os.path.exists(zip_path):
         os.remove(zip_path)
 
-def extract_frames(video_url: str, output_folder: str, interval: int = 5):
+def extract_frames(video_url: str, output_folder: str, interval: int = 5, crop_type: str = "none"):
     os.makedirs(output_folder, exist_ok=True)
     
     try:
         # Get the direct video stream URL using pytubefix
         print(f"Fetching stream URL for {video_url}...")
         from pytubefix import YouTube
-        yt = YouTube(video_url, client='WEB', use_po_token=True)
+        yt = YouTube(video_url)
         stream = yt.streams.filter(file_extension='mp4').first()
         
         if not stream or not stream.url:
@@ -45,15 +46,31 @@ def extract_frames(video_url: str, output_folder: str, interval: int = 5):
             
         stream_url = stream.url
             
-        print("Extracting frames with ffmpeg...")
+        print(f"Extracting frames with ffmpeg (crop mode: {crop_type})...")
         output_pattern = os.path.join(output_folder, "screenshot_%04d.jpg")
-        fps_filter = f"fps=1/{interval}"
         
+        # Build ffmpeg video filter string
+        filters = []
+        if crop_type == "no_bottom":
+            filters.append("crop=iw:ih*0.85:0:0")
+        elif crop_type == "central_4_3":
+            # Crop 48% width, 85% height, centered horizontally (offset 26% width)
+            filters.append("crop=iw*0.48:ih*0.85:iw*0.26:0")
+        filters.append(f"fps=1/{interval}")
+        filter_str = ",".join(filters)
+        
+        # Check if local ffmpeg.exe exists in root or parent folder
+        ffmpeg_path = "ffmpeg"
+        if os.path.exists("ffmpeg.exe"):
+            ffmpeg_path = os.path.abspath("ffmpeg.exe")
+        elif os.path.exists(os.path.join(os.path.dirname(__file__), "..", "ffmpeg.exe")):
+            ffmpeg_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "ffmpeg.exe"))
+            
         ffmpeg_cmd = [
-            "ffmpeg",
+            ffmpeg_path,
             "-y", 
             "-i", stream_url,
-            "-vf", fps_filter,
+            "-vf", filter_str,
             "-q:v", "2",
             output_pattern
         ]
@@ -75,7 +92,7 @@ async def generate_screenshots(req: ScreenshotRequest, background_tasks: Backgro
     zip_path = f"screenshots_{run_id}.zip"
 
     try:
-        extract_frames(req.videoUrl, output_folder, req.intervalSeconds)
+        extract_frames(req.videoUrl, output_folder, req.intervalSeconds, req.cropType)
 
         # Check if files were created
         if not os.path.exists(output_folder) or len(os.listdir(output_folder)) == 0:

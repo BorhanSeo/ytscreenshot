@@ -1,0 +1,30 @@
+# Binaries
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Tunnels and logs
+cloudflared.log
+url.txt
+*.log
+
+# Temp folders
+temp_screenshots_*/
+test_images/
+test_output/
+
+# Python cache
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+env/
+
+# Node/Next.js
+node_modules/
+.next/
+out/
+.env*
+.DS_Store

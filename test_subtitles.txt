@@ -1,0 +1,3 @@
+প্রথম লাইনের সাবটাইটেল (বাংলা টেস্ট)
+Second line of subtitle (English test)
+This is a very long subtitle line to test the automatic text wrapping capability of our new script. It should wrap nicely over multiple lines.
