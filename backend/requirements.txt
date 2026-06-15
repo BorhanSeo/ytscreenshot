@@ -1,3 +1,5 @@
 fastapi
 uvicorn
 pytubefix
+python-multipart
+pillow

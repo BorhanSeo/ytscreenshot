@@ -8,6 +8,17 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   
+  // Tab control
+  const [activeTab, setActiveTab] = useState<"extract" | "subtitles">("extract");
+  
+  // Subtitle tool states
+  const [imagesZip, setImagesZip] = useState<File | null>(null);
+  const [subtitlesTxt, setSubtitlesTxt] = useState<File | null>(null);
+  const [subtitleStyle, setSubtitleStyle] = useState<"outline" | "bg_box">("outline");
+  const [fontSize, setFontSize] = useState("");
+  const [fontScale, setFontScale] = useState(0.045);
+  const [margin, setMargin] = useState(0.08);
+
   // Backend URL settings states
   const defaultUrl = "https://worthy-memory-problems-tapes.trycloudflare.com";
   const [backendUrl, setBackendUrl] = useState(defaultUrl);
@@ -32,6 +43,61 @@ export default function Home() {
     };
     initBackend();
   }, []);
+
+  const handleSubtitlesSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!imagesZip) {
+      setError("Please select a ZIP file containing images.");
+      return;
+    }
+    if (!subtitlesTxt) {
+      setError("Please select a TXT file containing subtitles.");
+      return;
+    }
+    
+    setError("");
+    setLoading(true);
+
+    try {
+      const formData = new FormData();
+      formData.append("images_zip", imagesZip);
+      formData.append("subtitles_txt", subtitlesTxt);
+      formData.append("style", subtitleStyle);
+      formData.append("font_size", fontSize);
+      formData.append("font_scale", fontScale.toString());
+      formData.append("margin", margin.toString());
+
+      const response = await fetch(`${backendUrl}/api/subtitles`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        let errorMsg = "Failed to process images and subtitles";
+        if (errorData?.detail) {
+          errorMsg = typeof errorData.detail === 'string' ? errorData.detail : JSON.stringify(errorData.detail);
+        }
+        throw new Error(errorMsg);
+      }
+
+      // Download the zip file
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = downloadUrl;
+      a.download = "subtitled_images.zip";
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(downloadUrl);
+      document.body.removeChild(a);
+
+    } catch (err: any) {
+      setError(err.message || "Something went wrong.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const testConnection = async (targetUrl: string): Promise<boolean> => {
     if (!targetUrl) return false;
@@ -126,99 +192,266 @@ export default function Home() {
             YT Screenshot Extractor
           </h1>
           <p className="text-lg text-neutral-400 max-w-xl mx-auto">
-            Paste any YouTube link and automatically extract perfectly cropped screenshots from the entire video.
+            {activeTab === "extract"
+              ? "Paste any YouTube link and automatically extract perfectly cropped screenshots from the entire video."
+              : "Upload a ZIP file of images and a TXT file of subtitles to overlay text on your images sequentially."}
           </p>
         </div>
 
         {/* Form Card */}
         <div className="w-full bg-white/5 border border-white/10 p-6 sm:p-10 rounded-3xl backdrop-blur-xl shadow-2xl shadow-black/50">
-          <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-            <div className="flex flex-col gap-2 text-left">
-              <div className="flex justify-between items-center ml-1">
-                <label htmlFor="url" className="text-sm font-medium text-neutral-300">
-                  YouTube Video URL
-                </label>
-                
-                {/* Connection Status Indicator */}
-                <button
-                  type="button"
-                  onClick={() => setShowSettings(!showSettings)}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-neutral-400 transition-colors"
-                >
-                  <span className={`w-2 h-2 rounded-full ${
-                    backendConnected === true ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]" : 
-                    backendConnected === false ? "bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.6)]" : 
-                    "bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.6)] animate-pulse"
-                  }`} />
-                  {backendConnected === true ? "Local Backend: Connected" : 
-                   backendConnected === false ? "Local Backend: Offline" : 
-                   "Checking connection..."}
-                  <Settings className="w-3.5 h-3.5 ml-1 text-neutral-500" />
-                </button>
-              </div>
-              
-              <div className="relative group">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <Video className="h-5 w-5 text-neutral-500 group-focus-within:text-red-400 transition-colors" />
-                </div>
-                <input
-                  type="url"
-                  id="url"
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  placeholder="https://www.youtube.com/watch?v=..."
-                  className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:border-red-500/50 transition-all duration-300"
-                  required
-                />
-              </div>
-            </div>
+          
+          {/* Tab Switcher */}
+          <div className="flex border-b border-white/10 pb-4 mb-6 gap-6 justify-center">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab("extract");
+                setError("");
+              }}
+              className={`pb-2 text-sm font-semibold tracking-wider transition-all border-b-2 flex items-center gap-2 ${
+                activeTab === "extract" 
+                  ? "text-red-500 border-red-500" 
+                  : "text-neutral-500 border-transparent hover:text-neutral-300"
+              }`}
+            >
+              <Video className="w-4 h-4" />
+              Extract Screenshots
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab("subtitles");
+                setError("");
+              }}
+              className={`pb-2 text-sm font-semibold tracking-wider transition-all border-b-2 flex items-center gap-2 ${
+                activeTab === "subtitles" 
+                  ? "text-red-500 border-red-500" 
+                  : "text-neutral-500 border-transparent hover:text-neutral-300"
+              }`}
+            >
+              <ImageIcon className="w-4 h-4" />
+              Add Subtitles
+            </button>
+          </div>
 
-            {/* Cropping Options */}
-            <div className="flex flex-col gap-2.5 text-left">
-              <label className="text-sm font-medium text-neutral-300 ml-1">
-                Watermark & Subtitle Removal (Crop Mode)
-              </label>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setCropType("none")}
-                  className={`flex flex-col gap-1 p-3.5 rounded-2xl border text-left transition-all duration-200 ${
-                    cropType === "none" 
-                      ? "bg-red-600/10 border-red-500 text-white shadow-[0_0_15px_rgba(220,38,38,0.15)]" 
-                      : "bg-black/30 border-white/10 hover:border-white/20 text-neutral-400 hover:text-neutral-300"
-                  }`}
-                >
-                  <span className="text-xs font-bold uppercase tracking-wider">No Crop</span>
-                  <span className="text-[11px] leading-relaxed text-neutral-500">Full original video stream without modification.</span>
-                </button>
-                
-                <button
-                  type="button"
-                  onClick={() => setCropType("no_bottom")}
-                  className={`flex flex-col gap-1 p-3.5 rounded-2xl border text-left transition-all duration-200 ${
-                    cropType === "no_bottom" 
-                      ? "bg-red-600/10 border-red-500 text-white shadow-[0_0_15px_rgba(220,38,38,0.15)]" 
-                      : "bg-black/30 border-white/10 hover:border-white/20 text-neutral-400 hover:text-neutral-300"
-                  }`}
-                >
-                  <span className="text-xs font-bold uppercase tracking-wider">Remove Subtitles</span>
-                  <span className="text-[11px] leading-relaxed text-neutral-500">Crops bottom 15% to hide captions and player overlays.</span>
-                </button>
-                
-                <button
-                  type="button"
-                  onClick={() => setCropType("central_4_3")}
-                  className={`flex flex-col gap-1 p-3.5 rounded-2xl border text-left transition-all duration-200 ${
-                    cropType === "central_4_3" 
-                      ? "bg-red-600/10 border-red-500 text-white shadow-[0_0_15px_rgba(220,38,38,0.15)]" 
-                      : "bg-black/30 border-white/10 hover:border-white/20 text-neutral-400 hover:text-neutral-300"
-                  }`}
-                >
-                  <span className="text-xs font-bold uppercase tracking-wider">Center Focus (4:3)</span>
-                  <span className="text-[11px] leading-relaxed text-neutral-500">Removes left/right black bars, watermarks, and bottom text.</span>
-                </button>
-              </div>
-            </div>
+          <form onSubmit={activeTab === "extract" ? handleSubmit : handleSubtitlesSubmit} className="flex flex-col gap-6">
+            {activeTab === "extract" ? (
+              <>
+                <div className="flex flex-col gap-2 text-left">
+                  <div className="flex justify-between items-center ml-1">
+                    <label htmlFor="url" className="text-sm font-medium text-neutral-300">
+                      YouTube Video URL
+                    </label>
+                    
+                    {/* Connection Status Indicator */}
+                    <button
+                      type="button"
+                      onClick={() => setShowSettings(!showSettings)}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-neutral-400 transition-colors"
+                    >
+                      <span className={`w-2 h-2 rounded-full ${
+                        backendConnected === true ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]" : 
+                        backendConnected === false ? "bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.6)]" : 
+                        "bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.6)] animate-pulse"
+                      }`} />
+                      {backendConnected === true ? "Local Backend: Connected" : 
+                       backendConnected === false ? "Local Backend: Offline" : 
+                       "Checking connection..."}
+                      <Settings className="w-3.5 h-3.5 ml-1 text-neutral-500" />
+                    </button>
+                  </div>
+                  
+                  <div className="relative group">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                      <Video className="h-5 w-5 text-neutral-500 group-focus-within:text-red-400 transition-colors" />
+                    </div>
+                    <input
+                      type="url"
+                      id="url"
+                      value={url}
+                      onChange={(e) => setUrl(e.target.value)}
+                      placeholder="https://www.youtube.com/watch?v=..."
+                      className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:border-red-500/50 transition-all duration-300"
+                      required={activeTab === "extract"}
+                    />
+                  </div>
+                </div>
+
+                {/* Cropping Options */}
+                <div className="flex flex-col gap-2.5 text-left">
+                  <label className="text-sm font-medium text-neutral-300 ml-1">
+                    Watermark & Subtitle Removal (Crop Mode)
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setCropType("none")}
+                      className={`flex flex-col gap-1 p-3.5 rounded-2xl border text-left transition-all duration-200 ${
+                        cropType === "none" 
+                          ? "bg-red-600/10 border-red-500 text-white shadow-[0_0_15px_rgba(220,38,38,0.15)]" 
+                          : "bg-black/30 border-white/10 hover:border-white/20 text-neutral-400 hover:text-neutral-300"
+                      }`}
+                    >
+                      <span className="text-xs font-bold uppercase tracking-wider">No Crop</span>
+                      <span className="text-[11px] leading-relaxed text-neutral-500">Full original video stream without modification.</span>
+                    </button>
+                    
+                    <button
+                      type="button"
+                      onClick={() => setCropType("no_bottom")}
+                      className={`flex flex-col gap-1 p-3.5 rounded-2xl border text-left transition-all duration-200 ${
+                        cropType === "no_bottom" 
+                          ? "bg-red-600/10 border-red-500 text-white shadow-[0_0_15px_rgba(220,38,38,0.15)]" 
+                          : "bg-black/30 border-white/10 hover:border-white/20 text-neutral-400 hover:text-neutral-300"
+                      }`}
+                    >
+                      <span className="text-xs font-bold uppercase tracking-wider">Remove Subtitles</span>
+                      <span className="text-[11px] leading-relaxed text-neutral-500">Crops bottom 15% to hide captions and player overlays.</span>
+                    </button>
+                    
+                    <button
+                      type="button"
+                      onClick={() => setCropType("central_4_3")}
+                      className={`flex flex-col gap-1 p-3.5 rounded-2xl border text-left transition-all duration-200 ${
+                        cropType === "central_4_3" 
+                          ? "bg-red-600/10 border-red-500 text-white shadow-[0_0_15px_rgba(220,38,38,0.15)]" 
+                          : "bg-black/30 border-white/10 hover:border-white/20 text-neutral-400 hover:text-neutral-300"
+                      }`}
+                    >
+                      <span className="text-xs font-bold uppercase tracking-wider">Center Focus (4:3)</span>
+                      <span className="text-[11px] leading-relaxed text-neutral-500">Removes left/right black bars, watermarks, and bottom text.</span>
+                    </button>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                {/* Images ZIP File Upload */}
+                <div className="flex flex-col gap-2 text-left">
+                  <div className="flex justify-between items-center ml-1">
+                    <label htmlFor="imagesZip" className="text-sm font-medium text-neutral-300">
+                      Images ZIP File (Containing screenshots)
+                    </label>
+                    
+                    {/* Connection Status Indicator */}
+                    <button
+                      type="button"
+                      onClick={() => setShowSettings(!showSettings)}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-neutral-400 transition-colors"
+                    >
+                      <span className={`w-2 h-2 rounded-full ${
+                        backendConnected === true ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]" : 
+                        backendConnected === false ? "bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.6)]" : 
+                        "bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.6)] animate-pulse"
+                      }`} />
+                      {backendConnected === true ? "Local Backend: Connected" : 
+                       backendConnected === false ? "Local Backend: Offline" : 
+                       "Checking connection..."}
+                      <Settings className="w-3.5 h-3.5 ml-1 text-neutral-500" />
+                    </button>
+                  </div>
+                  <div className="relative group">
+                    <input
+                      type="file"
+                      id="imagesZip"
+                      accept=".zip"
+                      onChange={(e) => setImagesZip(e.target.files?.[0] || null)}
+                      className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 px-4 text-white focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:border-red-500/50 transition-all duration-300 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-neutral-800 file:text-neutral-300 hover:file:bg-neutral-700"
+                      required={activeTab === "subtitles"}
+                    />
+                  </div>
+                </div>
+
+                {/* Subtitles TXT File Upload */}
+                <div className="flex flex-col gap-2 text-left">
+                  <label htmlFor="subtitlesTxt" className="text-sm font-medium text-neutral-300 ml-1">
+                    Subtitles TXT File (One line of text per image)
+                  </label>
+                  <div className="relative group">
+                    <input
+                      type="file"
+                      id="subtitlesTxt"
+                      accept=".txt"
+                      onChange={(e) => setSubtitlesTxt(e.target.files?.[0] || null)}
+                      className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 px-4 text-white focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:border-red-500/50 transition-all duration-300 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-neutral-800 file:text-neutral-300 hover:file:bg-neutral-700"
+                      required={activeTab === "subtitles"}
+                    />
+                  </div>
+                </div>
+
+                {/* Subtitle Overlay Style */}
+                <div className="flex flex-col gap-2.5 text-left">
+                  <label className="text-sm font-medium text-neutral-300 ml-1">
+                    Subtitle Overlay Style
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setSubtitleStyle("outline")}
+                      className={`flex flex-col gap-1 p-3.5 rounded-2xl border text-left transition-all duration-200 ${
+                        subtitleStyle === "outline" 
+                          ? "bg-red-600/10 border-red-500 text-white shadow-[0_0_15px_rgba(220,38,38,0.15)]" 
+                          : "bg-black/30 border-white/10 hover:border-white/20 text-neutral-400 hover:text-neutral-300"
+                      }`}
+                    >
+                      <span className="text-xs font-bold uppercase tracking-wider">Outline Shadow</span>
+                      <span className="text-[11px] leading-relaxed text-neutral-500">White text with a thick black outline for visibility on any background.</span>
+                    </button>
+                    
+                    <button
+                      type="button"
+                      onClick={() => setSubtitleStyle("bg_box")}
+                      className={`flex flex-col gap-1 p-3.5 rounded-2xl border text-left transition-all duration-200 ${
+                        subtitleStyle === "bg_box" 
+                          ? "bg-red-600/10 border-red-500 text-white shadow-[0_0_15px_rgba(220,38,38,0.15)]" 
+                          : "bg-black/30 border-white/10 hover:border-white/20 text-neutral-400 hover:text-neutral-300"
+                      }`}
+                    >
+                      <span className="text-xs font-bold uppercase tracking-wider">Translucent Bar</span>
+                      <span className="text-[11px] leading-relaxed text-neutral-500">White text inside a dark semi-transparent rectangle box.</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Subtitle Sizing and Margins */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-left">
+                  <div className="flex flex-col gap-1.5">
+                    <label htmlFor="fontSize" className="text-xs text-neutral-400">Font Size (px, blank for auto)</label>
+                    <input
+                      type="number"
+                      id="fontSize"
+                      value={fontSize}
+                      onChange={(e) => setFontSize(e.target.value)}
+                      placeholder="Auto-scale"
+                      className="bg-black/40 border border-white/10 rounded-xl py-2.5 px-3.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-red-500/40"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label htmlFor="fontScale" className="text-xs text-neutral-400">Font Scale (Auto mode only)</label>
+                    <input
+                      type="number"
+                      id="fontScale"
+                      step="0.005"
+                      value={fontScale}
+                      onChange={(e) => setFontScale(parseFloat(e.target.value) || 0.045)}
+                      className="bg-black/40 border border-white/10 rounded-xl py-2.5 px-3.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-red-500/40"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label htmlFor="margin" className="text-xs text-neutral-400">Bottom Margin (% height)</label>
+                    <input
+                      type="number"
+                      id="margin"
+                      step="0.01"
+                      value={margin}
+                      onChange={(e) => setMargin(parseFloat(e.target.value) || 0.08)}
+                      className="bg-black/40 border border-white/10 rounded-xl py-2.5 px-3.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-red-500/40"
+                    />
+                  </div>
+                </div>
+              </>
+            )}
 
             {/* Configurable Settings Panel */}
             {showSettings && (
@@ -286,16 +519,21 @@ export default function Home() {
               {loading ? (
                 <>
                   <Loader2 className="w-5 h-5 animate-spin" />
-                  Processing Video... (This might take a while)
+                  {activeTab === "extract" ? "Processing Video... (This might take a while)" : "Processing Images & Subtitles..."}
                 </>
               ) : backendConnected !== true ? (
                 <>
                   Connect Local Backend Server above to Start
                 </>
-              ) : (
+              ) : activeTab === "extract" ? (
                 <>
                   <ImageIcon className="w-5 h-5" />
                   Extract & Download ZIP
+                </>
+              ) : (
+                <>
+                  <Download className="w-5 h-5" />
+                  Add Subtitles & Download ZIP
                 </>
               )}
             </button>
