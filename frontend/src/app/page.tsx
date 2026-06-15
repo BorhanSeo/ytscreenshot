@@ -20,28 +20,18 @@ export default function Home() {
   const [margin, setMargin] = useState(0.08);
 
   // Backend URL settings states
-  const defaultUrl = "https://worthy-memory-problems-tapes.trycloudflare.com";
-  const [backendUrl, setBackendUrl] = useState(defaultUrl);
+  const backendUrl = "http://localhost:10000";
   const [backendConnected, setBackendConnected] = useState<boolean | null>(null);
-  const [testingConnection, setTestingConnection] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
   const [cropType, setCropType] = useState("none");
 
-  // Initialize backend URL from localStorage on client side
+  // Periodically check if local backend is running
   useEffect(() => {
-    const initBackend = async () => {
-      const savedUrl = localStorage.getItem("backend_url");
-      if (savedUrl && savedUrl !== defaultUrl) {
-        setBackendUrl(savedUrl);
-        const success = await testConnection(savedUrl);
-        if (success) return;
-      }
-      
-      // Fallback to defaultUrl if savedUrl is missing or offline
-      setBackendUrl(defaultUrl);
-      await testConnection(defaultUrl);
+    const checkConnection = async () => {
+      await testConnection(backendUrl);
     };
-    initBackend();
+    checkConnection();
+    const interval = setInterval(checkConnection, 3000); // Check every 3 seconds
+    return () => clearInterval(interval);
   }, []);
 
   const handleSubtitlesSubmit = async (e: React.FormEvent) => {
@@ -103,9 +93,6 @@ export default function Home() {
   };
 
   const testConnection = async (targetUrl: string): Promise<boolean> => {
-    if (!targetUrl) return false;
-    setTestingConnection(true);
-    setBackendConnected(null);
     try {
       const response = await fetch(`${targetUrl}/`, {
         method: "GET",
@@ -118,7 +105,6 @@ export default function Home() {
         const data = await response.json();
         if (data.status && data.status.includes("Backend is running")) {
           setBackendConnected(true);
-          localStorage.setItem("backend_url", targetUrl);
           return true;
         }
       }
@@ -127,8 +113,6 @@ export default function Home() {
     } catch (err) {
       setBackendConnected(false);
       return false;
-    } finally {
-      setTestingConnection(false);
     }
   };
 
@@ -250,11 +234,7 @@ export default function Home() {
                     </label>
                     
                     {/* Connection Status Indicator */}
-                    <button
-                      type="button"
-                      onClick={() => setShowSettings(!showSettings)}
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-neutral-400 transition-colors"
-                    >
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-xs text-neutral-400">
                       <span className={`w-2 h-2 rounded-full ${
                         backendConnected === true ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]" : 
                         backendConnected === false ? "bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.6)]" : 
@@ -263,8 +243,7 @@ export default function Home() {
                       {backendConnected === true ? "Local Backend: Connected" : 
                        backendConnected === false ? "Local Backend: Offline" : 
                        "Checking connection..."}
-                      <Settings className="w-3.5 h-3.5 ml-1 text-neutral-500" />
-                    </button>
+                    </div>
                   </div>
                   
                   <div className="relative group">
@@ -340,11 +319,7 @@ export default function Home() {
                     </label>
                     
                     {/* Connection Status Indicator */}
-                    <button
-                      type="button"
-                      onClick={() => setShowSettings(!showSettings)}
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-neutral-400 transition-colors"
-                    >
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-xs text-neutral-400">
                       <span className={`w-2 h-2 rounded-full ${
                         backendConnected === true ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]" : 
                         backendConnected === false ? "bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.6)]" : 
@@ -353,8 +328,7 @@ export default function Home() {
                       {backendConnected === true ? "Local Backend: Connected" : 
                        backendConnected === false ? "Local Backend: Offline" : 
                        "Checking connection..."}
-                      <Settings className="w-3.5 h-3.5 ml-1 text-neutral-500" />
-                    </button>
+                    </div>
                   </div>
                   <div className="relative group">
                     <input
@@ -458,53 +432,7 @@ export default function Home() {
               </>
             )}
 
-            {/* Configurable Settings Panel */}
-            {showSettings && (
-              <div className="p-5 rounded-2xl bg-black/30 border border-white/5 text-left flex flex-col gap-4 transition-all duration-300 animate-in fade-in slide-in-from-top-2">
-                <div className="flex flex-col gap-1.5">
-                  <h3 className="text-sm font-semibold text-neutral-200">Local Backend Server Connection</h3>
-                  <p className="text-xs text-neutral-500 leading-normal">
-                    Due to YouTube's strict blocking of cloud hosting IPs (AWS, Render, etc.), this app routes video stream extraction through your residential local connection.
-                  </p>
-                </div>
-                
-                <div className="flex flex-col gap-2">
-                  <label className="text-xs text-neutral-400">Tunnel API URL (trycloudflare.com)</label>
-                  <div className="flex gap-2">
-                    <input
-                      type="url"
-                      value={backendUrl}
-                      onChange={(e) => {
-                        setBackendUrl(e.target.value);
-                        setBackendConnected(null);
-                      }}
-                      placeholder="https://xxx.trycloudflare.com"
-                      className="flex-1 bg-black/50 border border-white/10 rounded-xl py-2.5 px-4 text-sm text-neutral-200 placeholder-neutral-600 focus:outline-none focus:ring-1 focus:ring-red-500/40"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => testConnection(backendUrl)}
-                      disabled={testingConnection}
-                      className="inline-flex items-center gap-1.5 bg-neutral-800 hover:bg-neutral-700 disabled:opacity-50 text-white text-xs font-semibold px-4 rounded-xl transition-all"
-                    >
-                      {testingConnection ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <RefreshCw className="w-3.5 h-3.5" />
-                      )}
-                      Test
-                    </button>
-                  </div>
-                </div>
 
-                <div className="text-xs text-neutral-500 flex flex-col gap-1">
-                  <span className="font-semibold text-neutral-400">How to run the local server:</span>
-                  <span>1. Run <code className="bg-black/60 px-1 py-0.5 rounded text-red-400">python start_server.py</code> on your computer.</span>
-                  <span>2. Copy the generated <code className="bg-black/60 px-1 py-0.5 rounded text-neutral-400">trycloudflare.com</code> URL.</span>
-                  <span>3. Paste the URL here and click <strong>Test</strong> to save.</span>
-                </div>
-              </div>
-            )}
 
             {error && (
               <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl flex items-center gap-3 text-sm text-left">
@@ -528,7 +456,7 @@ export default function Home() {
                 </>
               ) : backendConnected !== true ? (
                 <>
-                  Connect Local Backend Server above to Start
+                  Start Local Backend Server on your PC to Connect
                 </>
               ) : activeTab === "extract" ? (
                 <>
