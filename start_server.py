@@ -13,9 +13,9 @@ def start_cloudflared():
         except Exception:
             pass
         
-    # Start cloudflared writing logs to cloudflared.log routing directly to localhost
+    # Start cloudflared writing logs to cloudflared.log routing directly to 127.0.0.1 (IPv4) to avoid Windows localhost IPv6 resolution failures
     process = subprocess.Popen(
-        [".\\cloudflared.exe", "tunnel", "--url", "http://localhost:10000", "--logfile", "cloudflared.log"],
+        [".\\cloudflared.exe", "tunnel", "--url", "http://127.0.0.1:10000", "--logfile", "cloudflared.log"],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL
     )
