@@ -69,6 +69,9 @@ export default function Home() {
 
       const response = await fetch(`${backendUrl}/api/subtitles`, {
         method: "POST",
+        headers: {
+          "Bypass-Tunnel-Reminder": "true"
+        },
         body: formData,
       });
 
@@ -107,7 +110,8 @@ export default function Home() {
       const response = await fetch(`${targetUrl}/`, {
         method: "GET",
         headers: {
-          "Accept": "application/json"
+          "Accept": "application/json",
+          "Bypass-Tunnel-Reminder": "true"
         }
       });
       if (response.ok) {
@@ -143,6 +147,7 @@ export default function Home() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "Bypass-Tunnel-Reminder": "true"
         },
         body: JSON.stringify({ videoUrl: url, cropType: cropType }),
       });
