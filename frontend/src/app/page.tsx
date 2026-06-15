@@ -18,6 +18,8 @@ export default function Home() {
   const [fontSize, setFontSize] = useState("");
   const [fontScale, setFontScale] = useState(0.045);
   const [margin, setMargin] = useState(0.08);
+  const [isBold, setIsBold] = useState(false);
+  const [textColor, setTextColor] = useState("#FFFFFF");
 
   // Backend URL settings states
   const backendUrl = "http://localhost:10000";
@@ -56,6 +58,8 @@ export default function Home() {
       formData.append("font_size", fontSize);
       formData.append("font_scale", fontScale.toString());
       formData.append("margin", margin.toString());
+      formData.append("is_bold", isBold.toString());
+      formData.append("text_color", textColor);
 
       const response = await fetch(`${backendUrl}/api/subtitles`, {
         method: "POST",
@@ -390,6 +394,39 @@ export default function Home() {
                       <span className="text-xs font-bold uppercase tracking-wider">Translucent Bar</span>
                       <span className="text-[11px] leading-relaxed text-neutral-500">White text inside a dark semi-transparent rectangle box.</span>
                     </button>
+                  </div>
+                </div>
+
+                {/* Subtitle Text Options (Color & Bold) */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-left">
+                  <div className="flex flex-col gap-1.5">
+                    <label htmlFor="textColor" className="text-xs text-neutral-400">Text Color</label>
+                    <div className="flex items-center gap-3 bg-black/40 border border-white/10 rounded-xl py-2 px-3">
+                      <input
+                        type="color"
+                        id="textColor"
+                        value={textColor}
+                        onChange={(e) => setTextColor(e.target.value)}
+                        className="w-8 h-8 rounded cursor-pointer border-0 p-0 bg-transparent focus:outline-none"
+                      />
+                      <span className="text-sm text-neutral-300 font-mono uppercase">{textColor}</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1.5 justify-end pb-2">
+                    <label className="flex items-center gap-3 cursor-pointer group">
+                      <div className={`w-12 h-6 rounded-full transition-colors flex items-center px-1 ${isBold ? 'bg-red-500' : 'bg-neutral-700'}`}>
+                        <div className={`w-4 h-4 bg-white rounded-full transition-transform ${isBold ? 'translate-x-6' : 'translate-x-0'}`} />
+                      </div>
+                      <span className={`text-sm transition-colors ${isBold ? 'text-white font-bold' : 'text-neutral-400 font-medium'}`}>
+                        Bold Text
+                      </span>
+                      <input 
+                        type="checkbox" 
+                        className="hidden" 
+                        checked={isBold} 
+                        onChange={(e) => setIsBold(e.target.checked)} 
+                      />
+                    </label>
                   </div>
                 </div>
 

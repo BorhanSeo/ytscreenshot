@@ -130,17 +130,26 @@ async def generate_screenshots(req: ScreenshotRequest, background_tasks: Backgro
 def natural_sort_key(text):
     return [int(c) if c.isdigit() else c.lower() for c in re.split(r'(\d+)', text)]
 
-def get_default_font():
+def get_default_font(is_bold=False):
     win_font_dir = os.path.join(os.environ.get("WINDIR", "C:\\Windows"), "Fonts")
-    candidates = [
-        os.path.join(win_font_dir, "Nirmala.ttf"),
-        os.path.join(win_font_dir, "Nirmalab.ttf"),
-        os.path.join(win_font_dir, "vrinda.ttf"),
-        os.path.join(win_font_dir, "SiyamRupali.ttf"),
-        os.path.join(win_font_dir, "SolaimanLipi.ttf"),
-        os.path.join(win_font_dir, "arial.ttf"),
-        os.path.join(win_font_dir, "calibri.ttf"),
-    ]
+    
+    if is_bold:
+        candidates = [
+            os.path.join(win_font_dir, "Nirmalab.ttf"),      # Nirmala UI Bold
+            os.path.join(win_font_dir, "arialbd.ttf"),       # Arial Bold
+            os.path.join(win_font_dir, "calibrib.ttf"),      # Calibri Bold
+            os.path.join(win_font_dir, "SiyamRupali.ttf"),   # Bengali fallback
+            os.path.join(win_font_dir, "SolaimanLipi.ttf"),
+        ]
+    else:
+        candidates = [
+            os.path.join(win_font_dir, "Nirmala.ttf"),       # Nirmala UI
+            os.path.join(win_font_dir, "arial.ttf"),         # Arial
+            os.path.join(win_font_dir, "calibri.ttf"),       # Calibri
+            os.path.join(win_font_dir, "SiyamRupali.ttf"),   # Bengali fallback
+            os.path.join(win_font_dir, "SolaimanLipi.ttf"),
+        ]
+        
     for font_path in candidates:
         if os.path.exists(font_path):
             return font_path
@@ -184,6 +193,8 @@ async def add_subtitles_endpoint(
     margin: float = Form(0.08),
     outline_width: int = Form(3),
     bg_opacity: float = Form(0.55),
+    is_bold: str = Form("false"),
+    text_color: str = Form("#FFFFFF"),
 ):
     run_id = str(uuid.uuid4())
     temp_dir = f"temp_subtitles_{run_id}"
@@ -226,7 +237,8 @@ async def add_subtitles_endpoint(
         if process_count == 0:
             raise HTTPException(status_code=400, detail="Either images list or subtitle lines are empty.")
             
-        font_path = get_default_font()
+        use_bold = is_bold.lower() == "true"
+        font_path = get_default_font(is_bold=use_bold)
         
         # Parse font_size if provided
         parsed_font_size = None
@@ -328,12 +340,12 @@ async def add_subtitles_endpoint(
                             (x, current_y), 
                             line, 
                             font=font, 
-                            fill="white", 
+                            fill=text_color, 
                             stroke_width=outline_width,
                             stroke_fill="black"
                         )
                     else:
-                        draw.text((x, current_y), line, font=font, fill="white")
+                        draw.text((x, current_y), line, font=font, fill=text_color)
                         
                     current_y += line_heights[idx] + line_spacing
                     
