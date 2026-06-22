@@ -5,6 +5,7 @@ import time
 import zipfile
 import subprocess
 import re
+import yt_dlp
 from fastapi import FastAPI, BackgroundTasks, HTTPException, UploadFile, File, Form
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -374,6 +375,59 @@ async def add_subtitles_endpoint(
         cleanup(temp_dir, output_zip_path)
         raise HTTPException(status_code=500, detail=str(e))
 
+
+class ChannelScrapeRequest(BaseModel):
+    channelUrl: str
+    maxVideos: int = 100
+
+@app.post("/api/channel/videos")
+async def extract_channel_videos(req: ChannelScrapeRequest):
+    if not req.channelUrl:
+        raise HTTPException(status_code=400, detail="Channel URL is required")
+    
+    try:
+        ydl_opts = {
+            'extract_flat': True,
+            'playlistend': req.maxVideos if req.maxVideos > 0 else None,
+            'quiet': True,
+            'no_warnings': True,
+        }
+        
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(req.channelUrl, download=False)
+            
+            if not info:
+                raise Exception("Failed to retrieve channel information.")
+                
+            entries = info.get('entries', [])
+            if not entries:
+                return {
+                    "channelName": info.get('title') or "YouTube Channel",
+                    "videos": []
+                }
+                
+            videos = []
+            for entry in entries:
+                if not entry:
+                    continue
+                video_id = entry.get('id')
+                video_title = entry.get('title') or "Untitled Video"
+                video_url = f"https://www.youtube.com/watch?v={video_id}" if video_id else entry.get('url')
+                
+                videos.append({
+                    "id": video_id,
+                    "title": video_title,
+                    "url": video_url
+                })
+                
+            return {
+                "channelName": info.get('title') or "YouTube Channel",
+                "videos": videos
+            }
+            
+    except Exception as e:
+        print(f"Error scraping channel: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to scrape channel: {str(e)}")
 
 @app.get("/")
 def read_root():

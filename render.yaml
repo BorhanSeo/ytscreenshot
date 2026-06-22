@@ -1,6 +1,0 @@
-services:
-  - type: web
-    name: ytscreenshot-backend
-    env: docker
-    rootDir: backend
-    plan: free

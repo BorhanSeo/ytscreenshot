@@ -1,8 +1,12 @@
 @echo off
 title YT Screenshot Extractor - Local Server
-cd /d "d:\Claude Code\YT Screenshoot"
+cd /d "%~dp0"
 echo ============================================================
-echo Starting FastAPI Backend and Cloudflare Tunnel...
+echo Installing required packages (if missing)...
+echo ============================================================
+pip install -r requirements.txt
+echo ============================================================
+echo Starting Local Backend Server...
 echo ============================================================
 python start_server.py
 pause

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Film, Download, Loader2, Image as ImageIcon, Video, AlertCircle, Settings, Check, RefreshCw } from "lucide-react";
+import { Film, Download, Loader2, Image as ImageIcon, Video, AlertCircle, Settings, Check, RefreshCw, List, FileSpreadsheet, Search, Copy, ExternalLink } from "lucide-react";
 
 export default function Home() {
   const [url, setUrl] = useState("");
@@ -9,7 +9,7 @@ export default function Home() {
   const [error, setError] = useState("");
   
   // Tab control
-  const [activeTab, setActiveTab] = useState<"extract" | "subtitles">("extract");
+  const [activeTab, setActiveTab] = useState<"extract" | "subtitles" | "channel">("extract");
   
   // Subtitle tool states
   const [imagesZip, setImagesZip] = useState<File | null>(null);
@@ -25,6 +25,13 @@ export default function Home() {
   const backendUrl = "http://localhost:10000";
   const [backendConnected, setBackendConnected] = useState<boolean | null>(null);
   const [cropType, setCropType] = useState("none");
+
+  // Channel scraper states
+  const [channelUrl, setChannelUrl] = useState("");
+  const [maxVideos, setMaxVideos] = useState(100);
+  const [extractedChannelName, setExtractedChannelName] = useState("");
+  const [extractedVideos, setExtractedVideos] = useState<{ id: string; title: string; url: string }[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Periodically check if local backend is running
   useEffect(() => {
@@ -167,6 +174,82 @@ export default function Home() {
     }
   };
 
+  const handleChannelSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!channelUrl) {
+      setError("Please enter a YouTube Channel URL");
+      return;
+    }
+    
+    setError("");
+    setLoading(true);
+    setExtractedVideos([]);
+    setExtractedChannelName("");
+
+    try {
+      const response = await fetch(`${backendUrl}/api/channel/videos`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Bypass-Tunnel-Reminder": "true"
+        },
+        body: JSON.stringify({ channelUrl, maxVideos: Number(maxVideos) }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        let errorMsg = "Failed to scrape channel";
+        if (errorData?.detail) {
+          errorMsg = typeof errorData.detail === 'string' ? errorData.detail : JSON.stringify(errorData.detail);
+        }
+        throw new Error(errorMsg);
+      }
+
+      const data = await response.json();
+      setExtractedChannelName(data.channelName || "YouTube Channel");
+      setExtractedVideos(data.videos || []);
+
+    } catch (err: any) {
+      setError(err.message || "Something went wrong.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const downloadCSV = () => {
+    if (extractedVideos.length === 0) return;
+    
+    const filtered = extractedVideos.filter(v => 
+      v.title.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+    
+    if (filtered.length === 0) return;
+    
+    const csvRows = [
+      ["Title", "URL"],
+      ...filtered.map(v => [
+        `"${v.title.replace(/"/g, '""')}"`,
+        `"${v.url.replace(/"/g, '""')}"`
+      ])
+    ];
+    
+    const csvContent = "\uFEFF" + csvRows.map(row => row.join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    
+    const sanitizedChannelName = extractedChannelName
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "_")
+      .replace(/_+/g, "_")
+      .trim();
+    link.setAttribute("download", `${sanitizedChannelName || "channel"}_videos.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <main className="min-h-screen bg-neutral-950 text-white flex flex-col items-center justify-center p-4 sm:p-8 relative overflow-hidden">
       
@@ -187,13 +270,28 @@ export default function Home() {
           <p className="text-lg text-neutral-400 max-w-xl mx-auto">
             {activeTab === "extract"
               ? "Paste any YouTube link and automatically extract perfectly cropped screenshots from the entire video."
-              : "Upload a ZIP file of images and a TXT file of subtitles to overlay text on your images sequentially."}
+              : activeTab === "subtitles"
+              ? "Upload a ZIP file of images and a TXT file of subtitles to overlay text on your images sequentially."
+              : "Paste a YouTube channel link to extract all video titles and URLs, view them, and export to CSV."}
           </p>
         </div>
 
-        {/* Form Card */}
-        <div className="w-full bg-white/5 border border-white/10 p-6 sm:p-10 rounded-3xl backdrop-blur-xl shadow-2xl shadow-black/50">
+        <div className="w-full bg-white/5 border border-white/10 p-6 sm:p-10 rounded-3xl backdrop-blur-xl shadow-2xl shadow-black/50 relative">
           
+          {/* Global Connection Status Indicator */}
+          <div className="absolute top-4 right-6 sm:top-6 sm:right-10 z-20">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-xs text-neutral-400">
+              <span className={`w-2 h-2 rounded-full ${
+                backendConnected === true ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]" : 
+                backendConnected === false ? "bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.6)]" : 
+                "bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.6)] animate-pulse"
+              }`} />
+              {backendConnected === true ? "Local Backend: Connected" : 
+               backendConnected === false ? "Local Backend: Offline" : 
+               "Checking connection..."}
+            </div>
+          </div>
+
           {/* Tab Switcher */}
           <div className="flex border-b border-white/10 pb-4 mb-6 gap-6 justify-center">
             <button
@@ -226,28 +324,35 @@ export default function Home() {
               <ImageIcon className="w-4 h-4" />
               Add Subtitles
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab("channel");
+                setError("");
+              }}
+              className={`pb-2 text-sm font-semibold tracking-wider transition-all border-b-2 flex items-center gap-2 ${
+                activeTab === "channel" 
+                  ? "text-red-500 border-red-500" 
+                  : "text-neutral-500 border-transparent hover:text-neutral-300"
+              }`}
+            >
+              <List className="w-4 h-4" />
+              Scrape Channel Links
+            </button>
           </div>
 
-          <form onSubmit={activeTab === "extract" ? handleSubmit : handleSubtitlesSubmit} className="flex flex-col gap-6">
+          <form onSubmit={
+            activeTab === "extract" ? handleSubmit : 
+            activeTab === "subtitles" ? handleSubtitlesSubmit : 
+            handleChannelSubmit
+          } className="flex flex-col gap-6">
             {activeTab === "extract" ? (
-              <>
+              <div className="flex flex-col gap-6">
                 <div className="flex flex-col gap-2 text-left">
                   <div className="flex justify-between items-center ml-1">
                     <label htmlFor="url" className="text-sm font-medium text-neutral-300">
                       YouTube Video URL
                     </label>
-                    
-                    {/* Connection Status Indicator */}
-                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-xs text-neutral-400">
-                      <span className={`w-2 h-2 rounded-full ${
-                        backendConnected === true ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]" : 
-                        backendConnected === false ? "bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.6)]" : 
-                        "bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.6)] animate-pulse"
-                      }`} />
-                      {backendConnected === true ? "Local Backend: Connected" : 
-                       backendConnected === false ? "Local Backend: Offline" : 
-                       "Checking connection..."}
-                    </div>
                   </div>
                   
                   <div className="relative group">
@@ -312,27 +417,15 @@ export default function Home() {
                     </button>
                   </div>
                 </div>
-              </>
-            ) : (
-              <>
+              </div>
+            ) : activeTab === "subtitles" ? (
+              <div className="flex flex-col gap-6">
                 {/* Images ZIP File Upload */}
                 <div className="flex flex-col gap-2 text-left">
                   <div className="flex justify-between items-center ml-1">
                     <label htmlFor="imagesZip" className="text-sm font-medium text-neutral-300">
                       Images ZIP File (Containing screenshots)
                     </label>
-                    
-                    {/* Connection Status Indicator */}
-                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-xs text-neutral-400">
-                      <span className={`w-2 h-2 rounded-full ${
-                        backendConnected === true ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]" : 
-                        backendConnected === false ? "bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.6)]" : 
-                        "bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.6)] animate-pulse"
-                      }`} />
-                      {backendConnected === true ? "Local Backend: Connected" : 
-                       backendConnected === false ? "Local Backend: Offline" : 
-                       "Checking connection..."}
-                    </div>
                   </div>
                   <div className="relative group">
                     <input
@@ -466,7 +559,49 @@ export default function Home() {
                     />
                   </div>
                 </div>
-              </>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-6">
+                {/* Channel URL */}
+                <div className="flex flex-col gap-2 text-left">
+                  <div className="flex justify-between items-center ml-1">
+                    <label htmlFor="channelUrl" className="text-sm font-medium text-neutral-300">
+                      YouTube Channel URL
+                    </label>
+                  </div>
+                  
+                  <div className="relative group">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                      <List className="h-5 w-5 text-neutral-500 group-focus-within:text-red-400 transition-colors" />
+                    </div>
+                    <input
+                      type="url"
+                      id="channelUrl"
+                      value={channelUrl}
+                      onChange={(e) => setChannelUrl(e.target.value)}
+                      placeholder="https://www.youtube.com/@ChannelName or https://www.youtube.com/channel/..."
+                      className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:border-red-500/50 transition-all duration-300"
+                      required={activeTab === "channel"}
+                    />
+                  </div>
+                </div>
+
+                {/* Sizing & Video Limits */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-left">
+                  <div className="flex flex-col gap-1.5">
+                    <label htmlFor="maxVideos" className="text-xs text-neutral-400">Maximum Videos to Fetch</label>
+                    <input
+                      type="number"
+                      id="maxVideos"
+                      value={maxVideos}
+                      onChange={(e) => setMaxVideos(parseInt(e.target.value) || 0)}
+                      placeholder="e.g. 100"
+                      className="bg-black/40 border border-white/10 rounded-xl py-2.5 px-3.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-red-500/40"
+                    />
+                    <span className="text-[10px] text-neutral-500 ml-1">Use a lower limit (e.g., 50-100) for faster responses. Set to 0 to fetch all videos.</span>
+                  </div>
+                </div>
+              </div>
             )}
 
 
@@ -489,7 +624,9 @@ export default function Home() {
               {loading ? (
                 <>
                   <Loader2 className="w-5 h-5 animate-spin" />
-                  {activeTab === "extract" ? "Processing Video... (This might take a while)" : "Processing Images & Subtitles..."}
+                  {activeTab === "extract" ? "Processing Video... (This might take a while)" : 
+                   activeTab === "subtitles" ? "Processing Images & Subtitles..." : 
+                   "Extracting channel videos... (This can take a moment)"}
                 </>
               ) : backendConnected !== true ? (
                 <>
@@ -500,15 +637,119 @@ export default function Home() {
                   <ImageIcon className="w-5 h-5" />
                   Extract & Download ZIP
                 </>
-              ) : (
+              ) : activeTab === "subtitles" ? (
                 <>
                   <Download className="w-5 h-5" />
                   Add Subtitles & Download ZIP
+                </>
+              ) : (
+                <>
+                  <List className="w-5 h-5" />
+                  Extract Channel Videos
                 </>
               )}
             </button>
           </form>
         </div>
+
+        {/* Extracted Videos Results Section */}
+        {activeTab === "channel" && extractedVideos.length > 0 && (
+          <div className="w-full bg-white/5 border border-white/10 p-6 sm:p-10 rounded-3xl backdrop-blur-xl shadow-2xl shadow-black/50 text-left flex flex-col gap-6 transition-all duration-300">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-4">
+              <div>
+                <h2 className="text-xl font-semibold text-white">
+                  {extractedChannelName}
+                </h2>
+                <p className="text-xs text-neutral-400 mt-1">
+                  Extracted {extractedVideos.length} video{extractedVideos.length === 1 ? '' : 's'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={downloadCSV}
+                className="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2.5 px-5 rounded-xl transition-all duration-200 shadow-lg shadow-emerald-950/20 text-sm cursor-pointer"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                Download CSV
+              </button>
+            </div>
+
+            {/* Search/Filter bar */}
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Search className="h-4 w-4 text-neutral-500" />
+              </div>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search videos by title..."
+                className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-sm text-white placeholder-neutral-500 focus:outline-none focus:ring-1 focus:ring-red-500/40 focus:border-red-500/40 transition-all duration-200"
+              />
+            </div>
+
+            {/* Table Container */}
+            <div className="overflow-x-auto rounded-xl border border-white/5 bg-black/20 max-h-[400px] overflow-y-auto">
+              <table className="w-full text-left border-collapse text-sm">
+                <thead>
+                  <tr className="border-b border-white/10 bg-white/5 text-neutral-400 font-medium">
+                    <th className="py-3 px-4 w-12 text-center">#</th>
+                    <th className="py-3 px-4">Title</th>
+                    <th className="py-3 px-4 w-28 text-center">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {extractedVideos
+                    .filter(v => v.title.toLowerCase().includes(searchQuery.toLowerCase()))
+                    .map((video, idx) => (
+                      <tr key={`${video.id || 'video'}-${idx}`} className="hover:bg-white/5 transition-colors group">
+                        <td className="py-3.5 px-4 text-center text-neutral-500 font-mono text-xs">{idx + 1}</td>
+                        <td className="py-3.5 px-4 font-medium text-neutral-200 break-words max-w-[200px] sm:max-w-md">
+                          {video.title}
+                        </td>
+                        <td className="py-3.5 px-4 text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <a
+                              href={video.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-1.5 rounded-lg bg-white/5 border border-white/10 text-neutral-400 hover:text-white hover:bg-white/10 transition-all"
+                              title="Open Video"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" />
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(video.url);
+                                const btn = document.getElementById(`copy-btn-${video.id || 'video'}-${idx}`);
+                                if (btn) {
+                                  btn.classList.add("text-emerald-500");
+                                  setTimeout(() => btn.classList.remove("text-emerald-500"), 1000);
+                                }
+                              }}
+                              id={`copy-btn-${video.id || 'video'}-${idx}`}
+                              className="p-1.5 rounded-lg bg-white/5 border border-white/10 text-neutral-400 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
+                              title="Copy URL"
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  {extractedVideos.filter(v => v.title.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 && (
+                    <tr>
+                      <td colSpan={3} className="py-8 text-center text-neutral-500">
+                        No videos match your search query.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         {/* Feature Highlights */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 w-full mt-4">
